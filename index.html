@@ -1,0 +1,1256 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sahi / Fano 薪资计算</title>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <style>
+    :root {
+      --bg: #f4f6fb; --panel: #fff; --text: #1f2937; --muted: #6b7280;
+      --primary: #2563eb; --primary-soft: #dbeafe; --success: #059669;
+      --success-soft: #d1fae5; --danger: #dc2626; --danger-soft: #fee2e2;
+      --border: #e5e7eb;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: var(--bg); color: var(--text);
+    }
+    .topbar {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 14px 24px; background: #111827; color: #fff; flex-wrap: wrap; gap: 8px;
+    }
+    .topbar a, .topbar button.link {
+      color: #dbeafe; margin-left: 16px; text-decoration: none;
+      background: none; border: 0; cursor: pointer; font: inherit; padding: 0;
+    }
+    .topbar button.link.active { color: #fff; font-weight: 700; }
+    .container { max-width: 1100px; margin: 24px auto; padding: 0 16px 40px; }
+    .panel {
+      background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+      padding: 20px 24px; margin-bottom: 20px; box-shadow: 0 1px 2px rgba(0,0,0,.04);
+    }
+    h1 { margin: 0 0 8px; font-size: 1.5rem; }
+    h2 { margin: 0 0 12px; font-size: 1.1rem; }
+    h3 { margin: 16px 0 8px; font-size: 1rem; }
+    .subtitle { color: var(--muted); margin: 0 0 16px; }
+    .actions { margin-top: 16px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+    .btn {
+      display: inline-block; padding: 10px 18px; border-radius: 8px; border: none;
+      text-decoration: none; cursor: pointer; font-size: .95rem; background: #e5e7eb; color: var(--text);
+    }
+    .btn-primary { background: var(--primary); color: #fff; }
+    .btn-secondary { background: #fff; color: var(--primary); border: 1px solid var(--primary); }
+    .btn:disabled { opacity: .55; cursor: not-allowed; }
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: .92rem; }
+    th, td { border-bottom: 1px solid var(--border); padding: 10px 8px; text-align: left; }
+    th { background: #f9fafb; }
+    .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
+    .form-grid label { display: flex; flex-direction: column; gap: 6px; font-size: .9rem; }
+    .alert { padding: 10px 12px; border-radius: 8px; margin-bottom: 12px; }
+    .alert-error { background: var(--danger-soft); color: var(--danger); }
+    .alert-success { background: var(--success-soft); color: var(--success); }
+    .back { color: var(--primary); text-decoration: none; display: inline-block; margin-bottom: 8px; background: none; border: 0; cursor: pointer; font: inherit; }
+    .tips-box { margin-top: 16px; padding: 12px 14px; background: #fffbeb; border: 1px solid #fde68a; border-radius: 8px; font-size: .9rem; line-height: 1.7; }
+    .error-list { margin: 8px 0 0; padding-left: 20px; color: #b91c1c; font-size: .9rem; }
+    .row-between { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+    .hidden { display: none !important; }
+    .checkbox { display: flex; align-items: center; gap: 8px; }
+    .file-dropzone {
+      position: relative; border: 2px dashed var(--border); border-radius: 10px;
+      background: #fff; cursor: pointer; transition: border-color .15s, background .15s;
+    }
+    .file-dropzone:hover { border-color: #94a3b8; background: #f8fafc; }
+    .file-dropzone.is-dragover { border-color: var(--primary); background: var(--primary-soft); }
+    .file-dropzone-input { position: absolute; width: 0; height: 0; opacity: 0; pointer-events: none; }
+    .file-dropzone-inner { padding: 18px 14px; text-align: center; }
+    .file-dropzone-hint { margin: 0; color: var(--muted); font-size: .9rem; line-height: 1.5; }
+    .file-dropzone-name { margin: 8px 0 0; font-size: .85rem; color: var(--primary); font-weight: 600; word-break: break-all; }
+    .public-products { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; margin-top: 8px; }
+    .public-card {
+      display: flex; flex-direction: column; gap: 8px; padding: 22px 20px;
+      border-radius: 12px; text-decoration: none; border: 1px solid var(--border); cursor: pointer; background: #fff;
+    }
+    .public-card strong { font-size: 1.25rem; }
+    .public-card span { color: var(--muted); font-size: .95rem; }
+    .sahi-card { background: #f0fdfa; color: #134e4a; border-color: #99f6e4; }
+    .fano-card { background: #f5f3ff; color: #4c1d95; border-color: #ddd6fe; }
+    .sahi-app { --primary: #0f766e; --primary-soft: #ccfbf1; --bg: #f0fdfa; }
+    .sahi-app .sahi-topbar { background: #134e4a; }
+    .sahi-app .sahi-topbar a, .sahi-app .sahi-topbar button.link { color: #99f6e4; }
+    .sahi-app .btn-primary { background: #0f766e; }
+    .sahi-app .btn-secondary { color: #0f766e; border-color: #0f766e; }
+    .sahi-app .back { color: #0f766e; }
+    .fano-app { --primary: #6d28d9; --primary-soft: #ede9fe; --bg: #f5f3ff; }
+    .fano-app .sahi-topbar { background: #4c1d95; }
+    .fano-app .sahi-topbar a, .fano-app .sahi-topbar button.link { color: #ddd6fe; }
+    .fano-app .btn-primary { background: #6d28d9; }
+    .fano-app .btn-secondary { color: #6d28d9; border-color: #6d28d9; }
+    .fano-app .back { color: #6d28d9; }
+    body.sahi-app, body.fano-app { background: var(--bg); }
+    .calc-form select, .calc-form input:not([type="checkbox"]):not([type="file"]) {
+      width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px;
+    }
+    .muted { color: var(--muted); }
+    .num { white-space: nowrap; }
+  </style>
+</head>
+<body>
+  <header class="topbar sahi-topbar" id="topbar">
+    <div class="brand" id="brand">区域薪资计算</div>
+    <nav id="nav" class="hidden">
+      <button class="link" data-go="calc">计算薪资</button>
+      <button class="link" data-go="policy">分区政策</button>
+      <button class="link" data-go="guilds">公会档案</button>
+      <button class="link" data-go="home">切换产品</button>
+    </nav>
+  </header>
+  <main class="container" id="app"></main>
+  <script>
+(function () {
+  "use strict";
+
+  const PAYOUT_HEADERS = [
+    "UID (必填)",
+    "红钻数量 (必填,发放为正整数)",
+    "发放原因 (必填, 0:其他; 1:红钻薪资; 2:红钻奖励; 3:活动奖励; 4:测试红钻)",
+    "操作描述 (选填)",
+    "备注 (选填)",
+  ];
+
+  const TURKEY_TIERS = [
+    [1,40000,28000,21000],[2,110000,66000,54000],[3,220000,130000,100000],[4,360000,210000,170000],
+    [5,500000,300000,240000],[6,660000,440000,350000],[7,880000,530000,430000],[8,1100000,660000,540000],
+    [9,1460000,880000,720000],[10,2640000,1700000,1400000],[11,3300000,2000000,1600000],[12,4400000,2600000,2100000],
+    [13,5860000,3900000,3100000],[14,6900000,4100000,3400000],[15,8000000,4800000,3900000],[16,11000000,6600000,5400000],
+    [17,14000000,8500000,6900000],[18,18000000,12000000,9700000],[19,25000000,15000000,12000000],[20,30000000,18000000,14000000],
+    [21,36000000,21000000,17000000],[22,42000000,25000000,20000000],[23,51000000,30000000,25000000],[24,57000000,34000000,28000000],
+    [25,66000000,44000000,35000000],[26,76000000,51000000,37000000],[27,88000000,53000000,43000000],[28,110000000,66000000,54000000],
+    [29,145000000,88000000,71000000],[30,180000000,100000000,89000000],[31,220000000,140000000,110000000],
+  ];
+  const STANDARD_TIERS = [
+    [1,30000,114000,30000],[2,45000,171000,45000],[3,60000,228000,60000],[4,75000,285000,75000],
+    [5,90000,342000,90000],[6,120000,456000,120000],[7,150000,570000,150000],[8,180000,684000,180000],
+    [9,210000,798000,210000],[10,300000,1140000,300000],[11,450000,1710000,450000],[12,600000,2280000,600000],
+    [13,900000,3420000,900000],[14,1200000,4560000,1200000],[15,1500000,5700000,1500000],[16,3000000,11400000,3000000],
+    [17,6000000,22800000,6000000],[18,10000000,38000000,10000000],
+  ];
+  const AFRICA_TARGETS = [900000,1350000,1800000,2250000,2700000,3600000,4500000,5400000,6300000,9000000,13500000,18000000,27000000,36000000,45000000,90000000,180000000,300000000];
+  const AFRICA_TIERS = AFRICA_TARGETS.map((t, i) => [i + 1, t, Math.trunc(t * 16 / 10), Math.trunc(t * 8 / 10)]);
+  const FANO_TR_TARGETS = [900000,1350000,1800000,2250000,2700000,3600000,4500000,5400000,6300000,9000000,13500000,18000000,27000000,36000000,45000000,90000000,180000000,300000000,420000000,540000000,700000000,840000000,1000000000,1200000000,1400000000,1600000000,1800000000,2000000000];
+  const FANO_TURKEY_TIERS = FANO_TR_TARGETS.map((t, i) => [i + 1, t, Math.trunc(t * 18 / 10), t]);
+  const SPECIAL_5241_QUOTAS = [
+    100000,200000,300000,400000,500000,600000,700000,800000,900000,1000000,
+    1200000,1400000,1600000,1800000,2000000,2300000,2600000,2900000,3200000,3500000,
+    4000000,4500000,5000000,5500000,6000000,7000000,8000000,9000000,10000000,11000000,12000000,13000000,14000000,15000000,
+    16500000,18000000,19500000,21000000,23000000,25000000,27500000,30000000,
+    32000000,34000000,36000000,38000000,40000000,42000000,44000000,46000000,50000000,
+    55000000,60000000,65000000,70000000,75000000,80000000,85000000,90000000,
+    100000000,110000000,120000000,130000000,140000000,150000000,
+    170000000,190000000,210000000,230000000,250000000,270000000,290000000,
+    320000000,350000000,380000000,410000000,440000000,470000000,500000000,
+    540000000,580000000,620000000,660000000,700000000,750000000,800000000,850000000,900000000,950000000,1000000000,
+    1060000000,1120000000,1180000000,1250000000,1320000000,1390000000,1460000000,1550000000,
+  ];
+  const SPECIAL_5241_TIERS = SPECIAL_5241_QUOTAS.map((q, i) => [i + 1, q, Math.trunc(q * 4 / 100), Math.trunc(q * 1 / 100)]);
+
+  function tuplesToTiers(rows) {
+    return rows.map(([tier_no, revenue_min, streamer_bonus, leader_bonus]) => ({
+      tier_no, revenue_min, streamer_bonus, leader_bonus,
+    }));
+  }
+  function policyTiersForCode(code) {
+    code = String(code || "").toUpperCase();
+    if (code === "VN") return tuplesToTiers(STANDARD_TIERS);
+    if (code === "TR5241" || code === "5241") return tuplesToTiers(SPECIAL_5241_TIERS);
+    if (["AF", "AFRICA", "FANO_AF", "AFW", "AF_WEEK"].includes(code)) return tuplesToTiers(AFRICA_TIERS);
+    if (code === "FTR" || code === "FANO_TR") return tuplesToTiers(FANO_TURKEY_TIERS);
+    return tuplesToTiers(TURKEY_TIERS);
+  }
+
+  const REGIONS = [
+    { code: "TR", name: "土耳其", product: "sahi", period_type: "weekly", calc_mode: "tier", special_guild_ids: "5241", region_match: "土耳其,Turkey", special_policy_code: "TR5241", bump_next_tier: 0, notes: "土耳其周结：常规 31 档。公会 5241 走 special offer（达档发下一档，主播+会长合并一张表）。" },
+    { code: "CIS", name: "独联体", product: "sahi", period_type: "daily", calc_mode: "ratio", streamer_rate: 3.5, leader_rate: 0.7, room_bonus_rate: 0.25, region_match: "独联体,CIS", notes: "独联体日结：主播钻石流水 × 3.5，公会长 × 0.7，房主房间流水 × 25%。请同时上传房间流水表。" },
+    { code: "VN", name: "越南", product: "sahi", period_type: "weekly", calc_mode: "tier", region_match: "越南,Vietnam", notes: "越南周结：18 档（主播 3.8 倍 / 会长 1 倍）。" },
+    { code: "AF", name: "非洲日结", product: "fano", period_type: "daily", calc_mode: "tier", region_match: "非洲,Africa", notes: "Fano 非洲日结 18 档：主播 160%、公会长 80%。按 N 列「昨日红钻流水(分)」÷100。未达 1 档不发，可改用非洲周结。" },
+    { code: "AFW", name: "非洲周结", product: "fano", period_type: "weekly", calc_mode: "tier", region_match: "非洲,Africa", notes: "与日结同一套 18 档。按本周红钻流水(分)÷100，本周为 0 则用上周。" },
+    { code: "FTR", name: "土耳其", product: "fano", period_type: "weekly", calc_mode: "tier", region_match: "土耳其,Turkey", notes: "Fano 土耳其 28 档：主播 180%、公会长 100%。默认周结。" },
+  ];
+  const HIDDEN_SPECIAL = {
+    code: "TR5241", name: "土耳其 5241", product: "sahi", period_type: "weekly", calc_mode: "tier",
+    bump_next_tier: 1, payout_layout: "combined", notes: "98 档，达档发下一档。",
+  };
+
+  const WORK_ALIASES = {
+    "主播showid": "streamer_show_id", "主播show id": "streamer_show_id", "streamer_show_id": "streamer_show_id",
+    "主播uid": "streamer_uid", "streamer_uid": "streamer_uid",
+    "公会id": "guild_id", "工会id": "guild_id", "guild_id": "guild_id",
+    "公会长showid": "leader_show_id", "工会长showid": "leader_show_id", "leader_show_id": "leader_show_id",
+    "红钻收入(流水)": "revenue", "红钻流水": "revenue", "revenue": "revenue",
+    "红钻收入": "revenue_fen", "红钻收入(分)": "revenue_fen", "红钻流水(分)": "revenue_fen", "红钻流水(分)(月)": "revenue_fen",
+    "今日红钻流水(分)": "today_revenue_fen", "昨日红钻流水(分)": "yesterday_revenue_fen", "昨日钻石流水(分)": "yesterday_revenue_fen",
+    "今日红钻流水": "today_revenue", "昨日红钻流水": "yesterday_revenue", "昨日钻石流水": "yesterday_revenue",
+    "本周红钻流水(分)": "week_revenue_fen", "本周红钻流水": "week_revenue",
+    "上周红钻流水(分)": "last_week_revenue_fen", "上周红钻流水": "last_week_revenue",
+    "时间(utc+8)": "work_time", "时间": "work_time",
+    "在麦时长(小时)": "mic_hours", "在麦时长": "mic_hours", "工作时长": "mic_hours", "mic_hours": "mic_hours",
+    "在麦天数": "mic_days", "工作天数": "mic_days", "mic_days": "mic_days",
+    "主播名称": "streamer_nickname", "主播昵称": "streamer_nickname",
+    "公会名称": "guild_name", "公会长昵称": "leader_nickname", "工会长昵称": "leader_nickname",
+    "公会长uid": "leader_uid", "工会长uid": "leader_uid", "leader_uid": "leader_uid",
+    "周期": "period", "所属大区": "region_label", "身份": "identity",
+  };
+  const GUILD_ALIASES = {
+    "公会id": "guild_id", "工会id": "guild_id", "guild_id": "guild_id",
+    "公会名称": "guild_name", "guild_name": "guild_name",
+    "公会长id": "leader_show_id", "公会长showid": "leader_show_id", "工会长showid": "leader_show_id",
+    "公会长昵称": "leader_nickname", "工会长昵称": "leader_nickname",
+    "公会长uid": "leader_uid", "工会长uid": "leader_uid", "leader_uid": "leader_uid",
+  };
+  const ROOM_ALIASES = {
+    "room_info.owner_id": "owner_uid", "owner_id": "owner_uid", "房主uid": "owner_uid", "房主id": "owner_uid", "owner_uid": "owner_uid",
+    "房间内礼物红钻收入": "room_revenue", "房间流水": "room_revenue", "房间红钻流水": "room_revenue", "礼物红钻收入": "room_revenue",
+    "room_id": "room_id", "房间id": "room_id",
+  };
+  const REVENUE_BLOCKLIST = ["红钻收入(余额)", "红钻收入（余额）", "待转结红钻", "待转结金币"];
+  const SKIP_SHEETS = new Set(["政策", "转会待发放金币"]);
+  const INT_FIELDS = new Set(["revenue","revenue_fen","today_revenue","yesterday_revenue","today_revenue_fen","yesterday_revenue_fen","week_revenue_fen","last_week_revenue_fen","week_revenue","last_week_revenue"]);
+  const FLOAT_FIELDS = new Set(["mic_hours","mic_days"]);
+  const REVENUE_FIELDS = new Set(["revenue","revenue_fen","today_revenue_fen","yesterday_revenue_fen","today_revenue","yesterday_revenue","week_revenue_fen","last_week_revenue_fen","week_revenue","last_week_revenue"]);
+
+  const LS_GUILDS = "sahiFano.guilds.v1";
+  const LS_POLICY = "sahiFano.policy.v1";
+  const LS_SETTINGS = "sahiFano.settings.v1";
+
+  const state = {
+    product: null,
+    page: "home",
+    workFile: null,
+    roomFile: null,
+    guildFile: null,
+    result: null,
+  };
+
+  function loadJson(key, fallback) {
+    try { return JSON.parse(localStorage.getItem(key) || "") || fallback; } catch { return fallback; }
+  }
+  function saveJson(key, value) { localStorage.setItem(key, JSON.stringify(value)); }
+
+  function cloneRegion(base) {
+    const settings = loadJson(LS_SETTINGS, {});
+    const ov = settings[base.product + ":" + base.code] || {};
+    return Object.assign({
+      streamer_rate: 3.5, leader_rate: 0.7, room_bonus_rate: 0.25,
+      special_guild_ids: "", region_match: "", special_policy_code: "", bump_next_tier: 0,
+    }, base, ov);
+  }
+  function regionsFor(product) {
+    return REGIONS.filter((r) => r.product === product).map(cloneRegion);
+  }
+  function getRegion(product, code) {
+    const found = REGIONS.find((r) => r.product === product && r.code === code);
+    return found ? cloneRegion(found) : null;
+  }
+  function tiersFor(region) {
+    const saved = loadJson(LS_POLICY, {});
+    const key = region.product + ":" + region.code;
+    if (saved[key] && saved[key].length) return saved[key];
+    return policyTiersForCode(region.code);
+  }
+  function guildMapFor(product, code) {
+    return loadJson(LS_GUILDS, {})[product + ":" + code] || {};
+  }
+
+  function rateBonus(revenue, rate) {
+    revenue = Number(revenue || 0);
+    if (revenue <= 0 || rate <= 0) return 0;
+    return Math.trunc(revenue * rate);
+  }
+  function fenToDiamonds(fen) { return Math.trunc(Number(fen || 0) / 100); }
+  function ratioResult(revenue, streamerRate, leaderRate) {
+    return { tier_no: null, revenue_min: null, streamer_bonus: rateBonus(revenue, streamerRate), leader_bonus: rateBonus(revenue, leaderRate), payout_tier_no: null };
+  }
+  function matchTier(revenue, tiers, bumpNext) {
+    revenue = Number(revenue || 0);
+    let best = null;
+    for (const tier of tiers) {
+      const req = Number(tier.revenue_min);
+      if (revenue >= req && (!best || req > Number(best.revenue_min))) best = tier;
+    }
+    if (!best) return { tier_no: null, revenue_min: null, streamer_bonus: 0, leader_bonus: 0, payout_tier_no: null };
+    let payout = best;
+    if (bumpNext) {
+      const higher = tiers.filter((t) => Number(t.revenue_min) > Number(best.revenue_min));
+      if (higher.length) payout = higher.reduce((a, b) => Number(a.revenue_min) < Number(b.revenue_min) ? a : b);
+    }
+    return {
+      tier_no: Number(best.tier_no), revenue_min: Number(best.revenue_min),
+      streamer_bonus: Number(payout.streamer_bonus), leader_bonus: Number(payout.leader_bonus),
+      payout_tier_no: Number(payout.tier_no),
+    };
+  }
+  function parseIdList(raw) {
+    return String(raw || "").split(/[,，]/).map((s) => s.trim()).filter(Boolean);
+  }
+  function shouldSkipWorkRow(row, specialIds, keywords) {
+    const guildId = String(row.guild_id || "").trim();
+    const regionLabel = String(row.region_label || "").trim();
+    const special = new Set(specialIds);
+    if (guildId && special.has(guildId)) return "special_guild";
+    if (regionLabel === "无工会信息" || regionLabel === "无公会信息") return "no_guild";
+    if (keywords.length && regionLabel && regionLabel !== "已退会") {
+      if (!keywords.some((k) => regionLabel.includes(k))) return "other_region";
+    }
+    return null;
+  }
+  function pickWorkRevenue(row, daily) {
+    if (daily) {
+      if (Object.prototype.hasOwnProperty.call(row, "yesterday_revenue_fen") && row.yesterday_revenue_fen != null)
+        return fenToDiamonds(row.yesterday_revenue_fen);
+      if (Object.prototype.hasOwnProperty.call(row, "yesterday_revenue") && row.yesterday_revenue != null)
+        return Number(row.yesterday_revenue || 0);
+      if (Object.prototype.hasOwnProperty.call(row, "revenue_fen") && row.revenue_fen != null)
+        return fenToDiamonds(row.revenue_fen);
+      return 0;
+    }
+    let week = null, lastWeek = null;
+    if (Object.prototype.hasOwnProperty.call(row, "week_revenue_fen") && row.week_revenue_fen != null)
+      week = fenToDiamonds(row.week_revenue_fen);
+    else if (Object.prototype.hasOwnProperty.call(row, "week_revenue") && row.week_revenue != null)
+      week = Number(row.week_revenue || 0);
+    if (Object.prototype.hasOwnProperty.call(row, "last_week_revenue_fen") && row.last_week_revenue_fen != null)
+      lastWeek = fenToDiamonds(row.last_week_revenue_fen);
+    else if (Object.prototype.hasOwnProperty.call(row, "last_week_revenue") && row.last_week_revenue != null)
+      lastWeek = Number(row.last_week_revenue || 0);
+    if (week) return week;
+    if (lastWeek) return lastWeek;
+    if (week != null) return week;
+    if (lastWeek != null) return lastWeek;
+    for (const key of ["revenue", "today_revenue", "yesterday_revenue"]) {
+      if (Object.prototype.hasOwnProperty.call(row, key) && row[key] != null) return Number(row[key] || 0);
+    }
+    return 0;
+  }
+  function inferWeekLabel(rows, previousDay) {
+    for (const row of rows) {
+      const period = String(row.period || "").trim();
+      if (period) return period;
+    }
+    for (const row of rows) {
+      const workTime = String(row.work_time || "").trim();
+      if (!workTime) continue;
+      const compact = workTime.replace(/[-/. :]/g, "");
+      if (/^\d{8}/.test(compact)) {
+        if (previousDay) {
+          const y = compact.slice(0, 4), m = compact.slice(4, 6), d = compact.slice(6, 8);
+          const dt = new Date(Number(y), Number(m) - 1, Number(d));
+          if (!isNaN(dt.getTime())) {
+            dt.setDate(dt.getDate() - 1);
+            const mm = String(dt.getMonth() + 1).padStart(2, "0");
+            const dd = String(dt.getDate()).padStart(2, "0");
+            return `${dt.getFullYear()}${mm}${dd}`;
+          }
+        }
+        return compact.slice(0, 8);
+      }
+      return workTime.slice(0, 10);
+    }
+    return "";
+  }
+  function aggregateLeaderPayouts(rows) {
+    const byGuild = {};
+    for (const row of rows) {
+      const gid = String(row.guild_id || "").trim();
+      if (!gid) continue;
+      if (!byGuild[gid]) {
+        byGuild[gid] = {
+          guild_id: gid, guild_name: row.guild_name || "", leader_show_id: row.leader_show_id || "",
+          leader_uid: row.leader_uid || "", leader_nickname: row.leader_nickname || "",
+          streamer_count: 0, total_revenue: 0, total_streamer_bonus: 0, total_leader_bonus: 0,
+        };
+      }
+      const g = byGuild[gid];
+      g.streamer_count += 1;
+      g.total_revenue += Number(row.revenue || 0);
+      g.total_streamer_bonus += Number(row.streamer_bonus || 0);
+      g.total_leader_bonus += Number(row.leader_bonus || 0);
+      for (const key of ["guild_name", "leader_show_id", "leader_uid", "leader_nickname"]) {
+        if (!g[key] && row[key]) g[key] = row[key];
+      }
+    }
+    return Object.values(byGuild).sort((a, b) => b.total_leader_bonus - a.total_leader_bonus || a.guild_id.localeCompare(b.guild_id));
+  }
+  function aggregatePayoutByUid(rows, uidKey, amountKey) {
+    const buckets = {};
+    for (const row of rows) {
+      const uid = String(row[uidKey] || "").trim();
+      const amount = Number(row[amountKey] || 0);
+      if (!uid || amount <= 0) continue;
+      if (!buckets[uid]) buckets[uid] = { uid, diamonds: 0 };
+      buckets[uid].diamonds += amount;
+    }
+    return Object.values(buckets).sort((a, b) => b.diamonds - a.diamonds || a.uid.localeCompare(b.uid));
+  }
+  function aggregateCombinedPayouts(rows) {
+    const buckets = {};
+    for (const row of rows) {
+      const su = String(row.streamer_uid || "").trim();
+      const sb = Number(row.streamer_bonus || 0);
+      if (su && sb > 0) buckets[su] = (buckets[su] || 0) + sb;
+      const lu = String(row.leader_uid || "").trim();
+      const lb = Number(row.leader_bonus || 0);
+      if (lu && lb > 0) buckets[lu] = (buckets[lu] || 0) + lb;
+    }
+    return Object.entries(buckets).filter(([, amt]) => amt > 0)
+      .map(([uid, diamonds]) => ({ uid, diamonds }))
+      .sort((a, b) => b.diamonds - a.diamonds || a.uid.localeCompare(b.uid));
+  }
+  function leaderPayoutRows(records) {
+    const flat = aggregateLeaderPayouts(records)
+      .filter((g) => g.leader_uid && g.total_leader_bonus > 0)
+      .map((g) => ({ leader_uid: g.leader_uid, leader_bonus: g.total_leader_bonus }));
+    return aggregatePayoutByUid(flat, "leader_uid", "leader_bonus");
+  }
+
+  function enrichAndCalculate(region, workRows, guildMap) {
+    const tiers = tiersFor(region);
+    const specialIds = parseIdList(region.special_guild_ids);
+    const keywords = parseIdList(region.region_match);
+    const bumpRegular = !!Number(region.bump_next_tier || 0);
+    const specialTiers = region.special_policy_code ? policyTiersForCode(region.special_policy_code) : [];
+    const specialBump = !!region.special_policy_code;
+    const ratioMode = String(region.calc_mode || "tier").toLowerCase() === "ratio";
+    const daily = String(region.period_type || "weekly") === "daily";
+    const streamerRate = Number(region.streamer_rate == null || region.streamer_rate === "" ? 3.5 : region.streamer_rate);
+    const leaderRate = Number(region.leader_rate == null || region.leader_rate === "" ? 0.7 : region.leader_rate);
+    const warnings = [];
+    const results = [];
+    let skippedOther = 0;
+
+    function fillLeader(row) {
+      const guildId = String(row.guild_id || "").trim();
+      const guild = guildMap[guildId];
+      return {
+        guild_id: guildId,
+        leader_uid: String(row.leader_uid || (guild && guild.leader_uid) || "").trim(),
+        leader_show_id: String(row.leader_show_id || (guild && guild.leader_show_id) || "").trim(),
+        leader_nickname: String(row.leader_nickname || (guild && guild.leader_nickname) || "").trim(),
+        guild_name: String(row.guild_name || (guild && guild.guild_name) || "").trim(),
+      };
+    }
+    function calculatedRow(row, filled, matched, recordKind) {
+      return {
+        streamer_show_id: String(row.streamer_show_id || ""),
+        streamer_uid: String(row.streamer_uid || ""),
+        streamer_nickname: String(row.streamer_nickname || ""),
+        guild_id: filled.guild_id,
+        leader_show_id: filled.leader_show_id,
+        leader_uid: filled.leader_uid,
+        leader_nickname: filled.leader_nickname,
+        guild_name: filled.guild_name,
+        revenue: Number(row.revenue || 0),
+        mic_hours: row.mic_hours,
+        mic_days: row.mic_days,
+        tier_no: matched.tier_no,
+        payout_tier_no: matched.payout_tier_no,
+        streamer_bonus: matched.streamer_bonus,
+        leader_bonus: matched.leader_bonus,
+        region_label: String(row.region_label || ""),
+        identity: String(row.identity || ""),
+        record_kind: recordKind,
+      };
+    }
+
+    for (const raw of workRows) {
+      const workRow = Object.assign({}, raw);
+      workRow.revenue = pickWorkRevenue(workRow, daily);
+      const reason = shouldSkipWorkRow(workRow, specialIds, keywords);
+      if (reason === "special_guild") {
+        const filled = fillLeader(workRow);
+        if (filled.guild_id && !filled.leader_uid) {
+          warnings.push(`公会 ${filled.guild_id} 未在公会档案中找到，主播 ${workRow.streamer_uid} 缺少会长 UID`);
+        }
+        const matched = matchTier(Number(workRow.revenue || 0), specialTiers.length ? specialTiers : tiers, specialBump);
+        results.push(calculatedRow(workRow, filled, matched, "special"));
+        continue;
+      }
+      if (reason) { skippedOther += 1; continue; }
+      const filled = fillLeader(workRow);
+      if (filled.guild_id && !filled.leader_uid) {
+        warnings.push(`公会 ${filled.guild_id} 未在公会档案中找到，主播 ${workRow.streamer_uid} 缺少会长 UID`);
+      }
+      if (!filled.leader_uid) {
+        warnings.push(`主播 ${workRow.streamer_uid}（公会 ${filled.guild_id || "-"}）缺少公会长 UID`);
+      }
+      const matched = ratioMode
+        ? ratioResult(Number(workRow.revenue || 0), streamerRate, leaderRate)
+        : matchTier(Number(workRow.revenue || 0), tiers, bumpRegular);
+      results.push(calculatedRow(workRow, filled, matched, "regular"));
+    }
+    return {
+      records: results,
+      warnings: [...new Set(warnings)],
+      skippedOther,
+      calc_mode: ratioMode ? "ratio" : "tier",
+      daily,
+      streamer_rate: streamerRate,
+      leader_rate: leaderRate,
+      room_bonus_rate: Number(region.room_bonus_rate == null || region.room_bonus_rate === "" ? 0.25 : region.room_bonus_rate),
+    };
+  }
+
+  function normHeader(value) {
+    return String(value || "").trim().toLowerCase().replace(/ /g, "")
+      .replace(/（/g, "(").replace(/）/g, ")").replace(/\u3000/g, "");
+  }
+  function buildAliasIndex(aliases) {
+    const index = {};
+    for (const [k, v] of Object.entries(aliases)) index[normHeader(k)] = v;
+    return index;
+  }
+  function mapHeaders(headers, aliases) {
+    const index = buildAliasIndex(aliases);
+    const block = new Set(REVENUE_BLOCKLIST.map(normHeader));
+    const aliasKeys = Object.keys(index).sort((a, b) => b.length - a.length);
+    const mapping = {};
+    headers.forEach((h, i) => {
+      const key = normHeader(h);
+      if (!key || block.has(key)) return;
+      let field = index[key];
+      if (!field) {
+        for (const aliasKey of aliasKeys) {
+          if (key === aliasKey || key.startsWith(aliasKey)) {
+            const candidate = index[aliasKey];
+            if (key.includes("(分)") && ["revenue", "today_revenue", "yesterday_revenue"].includes(candidate)) continue;
+            field = candidate;
+            break;
+          }
+        }
+      }
+      if (field) mapping[i] = field;
+    });
+    return mapping;
+  }
+  function cellStr(value) {
+    if (value == null || value === "") return "";
+    if (typeof value === "number" && Number.isFinite(value)) {
+      if (Number.isInteger(value) || Math.abs(value - Math.round(value)) < 1e-9) return String(Math.round(value));
+    }
+    if (value instanceof Date && !isNaN(value.getTime())) {
+      const p = (n) => String(n).padStart(2, "0");
+      return `${value.getFullYear()}-${p(value.getMonth() + 1)}-${p(value.getDate())} ${p(value.getHours())}:${p(value.getMinutes())}:${p(value.getSeconds())}`;
+    }
+    let text = String(value).trim();
+    if (text.endsWith(".0") && /^\d+$/.test(text.slice(0, -2))) text = text.slice(0, -2);
+    return text;
+  }
+  function cellInt(value) {
+    if (value == null || value === "" || value === "-") return 0;
+    if (typeof value === "number" && Number.isFinite(value)) return Math.trunc(value);
+    const text = String(value).trim().replace(/[,，]/g, "");
+    if (!text || text === "-") return 0;
+    const n = Number(text);
+    return Number.isFinite(n) ? Math.trunc(n) : 0;
+  }
+  function cellFloat(value) {
+    if (value == null || value === "" || value === "-") return null;
+    if (typeof value === "number" && Number.isFinite(value)) return value;
+    const text = String(value).trim().replace(/,/g, "");
+    if (!text || text === "-") return null;
+    const n = Number(text);
+    return Number.isFinite(n) ? n : null;
+  }
+  function sheetRows(ws) {
+    return XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: null });
+  }
+  function isEmptyRow(raw) {
+    return !raw || raw.every((c) => c == null || String(c).trim() === "");
+  }
+  function pickWorkSheet(wb) {
+    for (const name of wb.SheetNames) {
+      if (SKIP_SHEETS.has(name)) continue;
+      const rows = sheetRows(wb.Sheets[name]);
+      const headers = rows[0] || [];
+      const colmap = mapHeaders(headers, WORK_ALIASES);
+      const fields = new Set(Object.values(colmap));
+      if (fields.has("streamer_uid") && [...REVENUE_FIELDS].some((f) => fields.has(f))) {
+        return { headers, data: rows.slice(1) };
+      }
+    }
+    const first = wb.Sheets[wb.SheetNames[0]];
+    const rows = sheetRows(first);
+    return { headers: rows[0] || [], data: rows.slice(1) };
+  }
+  function looksLikeCsv(file, bytes) {
+    const name = (file && file.name || "").toLowerCase();
+    if (name.endsWith(".csv")) return true;
+    return !(bytes && bytes.length >= 2 && bytes[0] === 0x50 && bytes[1] === 0x4B);
+  }
+  async function readWorkbook(file) {
+    const buf = await file.arrayBuffer();
+    const bytes = new Uint8Array(buf);
+    if (looksLikeCsv(file, bytes)) {
+      let text = new TextDecoder("utf-8").decode(bytes);
+      if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
+      return XLSX.read(text, { type: "string" });
+    }
+    return XLSX.read(buf, { type: "array", cellDates: true });
+  }
+  async function parseWorkFile(file) {
+    const name = (file.name || "").toLowerCase();
+    if (name.endsWith(".csv")) return { rows: [], errors: ["主播工作数据请上传 Excel（.xlsx）。房间流水 CSV 请放到「房间流水」上传框。"] };
+    if (typeof XLSX === "undefined") return { rows: [], errors: ["Excel 组件未加载，请检查网络后刷新页面。"] };
+    let picked;
+    try {
+      const wb = await readWorkbook(file);
+      picked = pickWorkSheet(wb);
+    } catch (exc) {
+      return { rows: [], errors: ["无法读取工作数据 Excel，请确认第一份是主播工作表（.xlsx）。" + exc] };
+    }
+    const colmap = mapHeaders(picked.headers, WORK_ALIASES);
+    const fields = new Set(Object.values(colmap));
+    if (!fields.has("streamer_uid")) return { rows: [], errors: ["缺少必填列：主播 uid"] };
+    if (![...REVENUE_FIELDS].some((f) => fields.has(f))) {
+      return { rows: [], errors: ["缺少必填列：红钻收入(流水)、红钻收入 或 今日/昨日红钻流水。请确认不要用余额列。"] };
+    }
+    const rows = [], errors = [];
+    picked.data.forEach((raw, idx) => {
+      if (isEmptyRow(raw)) return;
+      const item = {};
+      for (const [colI, field] of Object.entries(colmap)) {
+        const val = raw[Number(colI)];
+        if (INT_FIELDS.has(field)) item[field] = cellInt(val);
+        else if (FLOAT_FIELDS.has(field)) item[field] = cellFloat(val);
+        else item[field] = cellStr(val);
+      }
+      if (!item.streamer_uid) {
+        errors.push(`第 ${idx + 2} 行：主播 uid 为空，已跳过`);
+        return;
+      }
+      if ("today_revenue_fen" in item) item.today_revenue = fenToDiamonds(item.today_revenue_fen || 0);
+      if ("yesterday_revenue_fen" in item) item.yesterday_revenue = fenToDiamonds(item.yesterday_revenue_fen || 0);
+      if ("week_revenue_fen" in item) item.week_revenue = fenToDiamonds(item.week_revenue_fen || 0);
+      if ("last_week_revenue_fen" in item) item.last_week_revenue = fenToDiamonds(item.last_week_revenue_fen || 0);
+      if ("revenue_fen" in item) {
+        const diamonds = fenToDiamonds(item.revenue_fen || 0);
+        if (!("yesterday_revenue" in item)) item.yesterday_revenue = diamonds;
+        if (!("revenue" in item)) item.revenue = diamonds;
+      }
+      if (!("revenue" in item)) item.revenue = Number(item.today_revenue || item.yesterday_revenue || 0);
+      rows.push(item);
+    });
+    return { rows, errors };
+  }
+  async function parseGuildFile(file) {
+    const wb = await readWorkbook(file);
+    const rowsAll = sheetRows(wb.Sheets[wb.SheetNames[0]]);
+    if (!rowsAll.length) return { rows: [], errors: ["空表"] };
+    const headers = rowsAll[0], data = rowsAll.slice(1);
+    const colmap = mapHeaders(headers, GUILD_ALIASES);
+    const fields = new Set(Object.values(colmap));
+    if (!fields.has("guild_id")) return { rows: [], errors: ["缺少必填列：公会 id"] };
+    if (!fields.has("leader_uid")) return { rows: [], errors: ["缺少必填列：公会长 uid"] };
+    const rows = [], errors = [];
+    data.forEach((raw, idx) => {
+      if (isEmptyRow(raw)) return;
+      const item = {};
+      for (const [colI, field] of Object.entries(colmap)) item[field] = cellStr(raw[Number(colI)]);
+      if (!item.guild_id) { errors.push(`第 ${idx + 2} 行：公会 id 为空，已跳过`); return; }
+      if (!item.leader_uid) { errors.push(`第 ${idx + 2} 行：公会长 uid 为空，已跳过`); return; }
+      rows.push(item);
+    });
+    return { rows, errors };
+  }
+  async function parseRoomBonusFile(file, rate) {
+    rate = rate == null ? 0.25 : rate;
+    const wb = await readWorkbook(file);
+    const rowsAll = sheetRows(wb.Sheets[wb.SheetNames[0]]);
+    if (!rowsAll.length) return { rows: [], errors: ["空表"] };
+    const headers = rowsAll[0], data = rowsAll.slice(1);
+    const colmap = mapHeaders(headers, ROOM_ALIASES);
+    const fields = new Set(Object.values(colmap));
+    if (!fields.has("owner_uid")) return { rows: [], errors: ["缺少必填列：房主 UID（room_info.owner_id）"] };
+    if (!fields.has("room_revenue")) return { rows: [], errors: ["缺少必填列：房间内礼物红钻收入"] };
+    const parsed = [], errors = [], seen = new Set();
+    data.forEach((raw, idx) => {
+      if (isEmptyRow(raw)) return;
+      const first = cellStr(raw[0]);
+      if (first.startsWith("阶段汇总")) return;
+      const item = {};
+      for (const [colI, field] of Object.entries(colmap)) {
+        const val = raw[Number(colI)];
+        item[field] = field === "room_revenue" ? cellInt(val) : cellStr(val);
+      }
+      const uid = String(item.owner_uid || "").trim();
+      if (!uid || uid === "0" || uid === "0.0" || uid === "-") {
+        errors.push(`第 ${idx + 2} 行：房主 UID 为空，已跳过`);
+        return;
+      }
+      const pairKey = uid + "\t" + Number(item.room_revenue || 0);
+      if (seen.has(pairKey)) return;
+      seen.add(pairKey);
+      parsed.push([uid, Number(item.room_revenue || 0)]);
+    });
+    const totals = {};
+    for (const [uid, rev] of parsed) totals[uid] = (totals[uid] || 0) + rev;
+    const rows = Object.entries(totals).map(([owner_uid, room_revenue]) => ({
+      owner_uid, room_revenue, room_bonus: rateBonus(room_revenue, rate),
+    })).sort((a, b) => b.room_bonus - a.room_bonus || a.owner_uid.localeCompare(b.owner_uid));
+    return { rows, errors };
+  }
+
+  function uidExcel(uid) {
+    const text = String(uid || "").trim();
+    return /^\d+$/.test(text) ? Number(text) : text;
+  }
+  function payoutAoA(payouts) {
+    const aoa = [PAYOUT_HEADERS];
+    for (const p of payouts) {
+      const diamonds = Number(p.diamonds || 0);
+      if (diamonds <= 0) continue;
+      aoa.push([uidExcel(p.uid), diamonds, 1, null, null]);
+    }
+    return aoa;
+  }
+  function downloadAoa(filename, aoa, sheetName) {
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+    XLSX.utils.book_append_sheet(wb, ws, sheetName || "Sheet1");
+    XLSX.writeFile(wb, filename);
+  }
+  function downloadDetail(result) {
+    const wb = XLSX.utils.book_new();
+    const headers = ["主播 showid","主播 uid","主播名称","公会 id","公会名称","公会长 showid","公会长 uid","公会长昵称","红钻收入(流水)","在麦时长(小时)","在麦天数","档位","发放档位","主播钻石 bonus","公会长钻石 bonus","所属大区","身份","类型"];
+    const aoa = [headers];
+    for (const r of result.records) {
+      aoa.push([r.streamer_show_id, r.streamer_uid, r.streamer_nickname, r.guild_id, r.guild_name, r.leader_show_id, r.leader_uid, r.leader_nickname, r.revenue, r.mic_hours, r.mic_days, r.tier_no, r.payout_tier_no, r.streamer_bonus, r.leader_bonus, r.region_label, r.identity, r.record_kind || "regular"]);
+    }
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoa), "主播明细");
+    const gHeaders = ["公会 id","公会名称","公会长 showid","公会长 uid","公会长昵称","主播人数","流水合计","主播 bonus 合计","公会长 bonus 合计"];
+    const gAoa = [gHeaders];
+    for (const g of aggregateLeaderPayouts(result.records)) {
+      gAoa.push([g.guild_id, g.guild_name, g.leader_show_id, g.leader_uid, g.leader_nickname, g.streamer_count, g.total_revenue, g.total_streamer_bonus, g.total_leader_bonus]);
+    }
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(gAoa), "公会合计");
+    const info = [
+      ["分区", result.region_name], ["分区代码", result.region_code], ["周期", result.week_label],
+      ["计算方式", result.calc_mode === "ratio" ? "比例" : "档位"], ["主播行数", result.records.length],
+    ];
+    if (result.calc_mode === "ratio") {
+      info.push(["主播比例", result.streamer_rate], ["会长比例", result.leader_rate], ["房主 bonus 比例", result.room_bonus_rate]);
+    }
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(info), "批次信息");
+    if (result.room_records && result.room_records.length) {
+      const rAoa = [["房主 uid", "房间流水", "房主 bonus"]];
+      for (const r of result.room_records) rAoa.push([r.owner_uid, r.room_revenue, r.room_bonus]);
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rAoa), "房主bonus");
+    }
+    XLSX.writeFile(wb, `${result.week_label}${result.region_name} 核对明细.xlsx`);
+  }
+
+  function escapeHtml(s) {
+    return String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  }
+  function fmtInt(n) {
+    n = Number(n || 0);
+    return n.toLocaleString("en-US");
+  }
+  function $(sel, root) { return (root || document).querySelector(sel); }
+  function $all(sel, root) { return [...(root || document).querySelectorAll(sel)]; }
+
+  function setTheme() {
+    document.body.classList.remove("sahi-app", "fano-app");
+    if (state.product === "fano") document.body.classList.add("sahi-app", "fano-app");
+    else if (state.product === "sahi") document.body.classList.add("sahi-app");
+    const brand = $("#brand");
+    brand.textContent = state.product === "fano" ? "Fano · 多区域薪资计算后台"
+      : state.product === "sahi" ? "Sahi · 多区域薪资计算后台" : "区域薪资计算";
+    $("#nav").classList.toggle("hidden", !state.product);
+    $all("#nav .link").forEach((btn) => {
+      btn.classList.toggle("active", btn.getAttribute("data-go") === state.page);
+    });
+  }
+
+  function enhanceDropzones(root) {
+    $all('input[type="file"]', root).forEach((input) => {
+      if (input.closest(".file-dropzone")) return;
+      const wrapper = document.createElement("div");
+      wrapper.className = "file-dropzone";
+      wrapper.innerHTML = '<div class="file-dropzone-inner"><p class="file-dropzone-hint">拖拽文件到此处，或点击选择</p><p class="file-dropzone-name"></p></div>';
+      input.classList.add("file-dropzone-input");
+      input.parentNode.insertBefore(wrapper, input);
+      wrapper.appendChild(input);
+      const nameEl = wrapper.querySelector(".file-dropzone-name");
+      wrapper.addEventListener("click", (e) => { e.preventDefault(); input.click(); });
+      input.addEventListener("change", () => {
+        nameEl.textContent = input.files && input.files[0] ? input.files[0].name : "";
+      });
+      wrapper.addEventListener("dragover", (e) => { e.preventDefault(); wrapper.classList.add("is-dragover"); });
+      wrapper.addEventListener("dragleave", (e) => {
+        if (!wrapper.contains(e.relatedTarget)) wrapper.classList.remove("is-dragover");
+      });
+      wrapper.addEventListener("drop", (e) => {
+        e.preventDefault();
+        wrapper.classList.remove("is-dragover");
+        if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+          const dt = new DataTransfer();
+          dt.items.add(e.dataTransfer.files[0]);
+          input.files = dt.files;
+          input.dispatchEvent(new Event("change", { bubbles: true }));
+        }
+      });
+    });
+  }
+
+  function tipsFor(region) {
+    if (!region) return "";
+    if (region.calc_mode === "ratio") return "独联体日结：第一份上传主播工作数据 Excel，按 V 列「昨日红钻流水(分)」÷100。主播 bonus = 昨日钻石流水 × 3.5；公会长 = × 0.7。第二份上传房间流水 CSV。房主 bonus = 房间流水 × 25%。";
+    if (region.code === "AF") return "非洲日结：按 N 列「昨日红钻流水(分)」÷100 得到昨日钻石流水。对照 18 档：主播 160%、公会长 80%。未达 1 档（90 万）不发，请改选「非洲周结」补结。";
+    if (region.code === "AFW") return "非洲周结：与日结同一套 18 档（主播 160% / 会长 80%）。按本周红钻流水(分)÷100，本周为 0 则用上周。用于日结未达标主播。";
+    if (region.code === "FTR") return "Fano 土耳其：28 档，主播 180%、公会长 100%。默认周结，按本周红钻流水(分)÷100（本周为 0 则用上周）。";
+    if (state.product === "fano" && region.period_type === "daily") return "日结：按 N 列「昨日红钻流水(分)」÷100 对照档位。未达最低档不发。";
+    if (state.product === "fano") return "周结：按「本周红钻流水(分)」÷100 对照档位；本周为 0 则用「上周红钻流水(分)」。未达最低档不发。";
+    return "使用平台导出的工作数据即可（含「红钻收入(流水)」列）。流水达到政策档位即给主播和公会长对应钻石；未达最低档不发。土耳其 5241 不走常规 31 档，按 special offer 达档发下一档，主播与会长钻石合并到一张下发表。";
+  }
+
+  function renderHome() {
+    return `
+      <section class="panel">
+        <h1>选择产品</h1>
+        <p class="subtitle">Sahi 与 Fano 分区政策、导入表和批次互不影响。计算全部在浏览器完成，可直接把本文件上传到 GitHub Pages。</p>
+        <div class="public-products">
+          <button class="public-card sahi-card" data-pick="sahi">
+            <strong>Sahi</strong>
+            <span>土耳其 / 独联体 / 越南等区域薪资</span>
+          </button>
+          <button class="public-card fano-card" data-pick="fano">
+            <strong>Fano</strong>
+            <span>非洲日结 / 非洲周结 / 土耳其等区域薪资</span>
+          </button>
+        </div>
+      </section>`;
+  }
+  function renderCalc() {
+    const regions = regionsFor(state.product);
+    const defaultCode = state.product === "fano" ? "AF" : "TR";
+    const options = regions.map((r) => {
+      const extra = (r.period_type === "daily" ? " · 日结" : " · 周结") + (r.calc_mode === "ratio" ? " · 比例" : "");
+      return `<option value="${escapeHtml(r.code)}" data-period="${r.period_type}" data-calc-mode="${r.calc_mode}" ${r.code === defaultCode ? "selected" : ""}>${escapeHtml(r.name)}（${escapeHtml(r.code)}${extra}）</option>`;
+    }).join("");
+    const subtitle = state.product === "fano"
+      ? "Fano 与 Sahi 后台隔离。请先选分区：日结按 N 列「昨日红钻流水(分)」÷100；周结按本周红钻流水(分)÷100（本周为 0 则用上周）。非洲日结未达标的主播，改选「非洲周结」再传同一份表即可补结。"
+      : "上传主播工作数据，按分区政策计算钻石 bonus，下载可直接导入发放后台的表格。土耳其公会 5241 会单独出一张合并表。独联体为日结比例，需同时上传房间 bonus 表。";
+    return `
+      <section class="panel">
+        <h1>多区域薪资计算</h1>
+        <p class="subtitle">${subtitle}</p>
+        <div id="calc-alert"></div>
+        <form class="calc-form" id="calc-form">
+          <div class="form-grid">
+            <label>分区
+              <select name="region_code" id="region-select">${options}</select>
+            </label>
+            <label>文件名前缀（可空，默认用表里的「周期」或工作日期）
+              <input name="week_label" placeholder="如 20260920，留空则读取工作表">
+            </label>
+            <label>主播工作数据 Excel
+              <input type="file" name="file" accept=".xlsx,.xlsm,.csv" required>
+            </label>
+            <label id="room-file-field">房间流水表（独联体必填，CSV 或 Excel）
+              <input type="file" name="room_file" accept=".xlsx,.xlsm,.csv">
+            </label>
+          </div>
+          <div class="actions">
+            <button class="btn btn-primary" type="submit">上传并计算</button>
+            <button class="btn btn-secondary" type="button" data-go="policy">查看 / 修改档位政策</button>
+          </div>
+        </form>
+        <p class="tips-box" id="sahi-tips"></p>
+      </section>`;
+  }
+  function payoutTable(title, subtitle, rows, extraCol) {
+    const body = rows.length
+      ? rows.map((p) => `<tr><td>${escapeHtml(p.uid || p.owner_uid)}</td>${extraCol ? `<td class="num">${fmtInt(p.room_revenue)}</td>` : ""}<td class="num">${fmtInt(p.diamonds || p.room_bonus)}</td><td>1</td></tr>`).join("")
+      : `<tr><td colspan="${extraCol ? 4 : 3}">本周无人达到最低档</td></tr>`;
+    return `
+      <section class="panel">
+        <h2>${title}（${rows.length} 行）</h2>
+        ${subtitle ? `<p class="subtitle">${subtitle}</p>` : ""}
+        <div class="table-wrap"><table>
+          <thead><tr><th>UID (必填)</th>${extraCol ? "<th>房间流水</th>" : ""}<th>红钻数量</th><th>发放原因</th></tr></thead>
+          <tbody>${body}</tbody>
+        </table></div>
+      </section>`;
+  }
+  function renderResult() {
+    const r = state.result;
+    if (!r) return `<section class="panel">还没有计算结果。<button class="btn btn-primary" data-go="calc">去计算</button></section>`;
+    const regular = r.records.filter((x) => x.record_kind !== "special");
+    const special = r.records.filter((x) => x.record_kind === "special");
+    const streamerPayouts = aggregatePayoutByUid(regular, "streamer_uid", "streamer_bonus");
+    const leaderPayouts = leaderPayoutRows(regular);
+    const specialPayouts = special.length ? aggregateCombinedPayouts(special) : [];
+    const paidHosts = streamerPayouts.length;
+    const paidLeaders = leaderPayouts.length;
+    const totalStreamer = regular.reduce((s, x) => s + Number(x.streamer_bonus || 0), 0);
+    const totalLeader = regular.reduce((s, x) => s + Number(x.leader_bonus || 0), 0);
+    const totalRoom = (r.room_records || []).reduce((s, x) => s + Number(x.room_bonus || 0), 0);
+    const totalSpecial = specialPayouts.reduce((s, x) => s + x.diamonds, 0);
+    const warnHtml = r.warnings && r.warnings.length
+      ? `<section class="panel alert alert-error"><strong>需注意：</strong><ul class="error-list">${r.warnings.slice(0, 20).map((w) => `<li>${escapeHtml(w)}</li>`).join("")}</ul></section>`
+      : "";
+    const subtitle = r.calc_mode === "ratio"
+      ? `日结比例 · 主播 × ${r.streamer_rate} · 会长 × ${r.leader_rate} · 房主 × ${r.room_bonus_rate} · 主播 ${paidHosts} 人 / ${fmtInt(totalStreamer)} · 公会长 ${paidLeaders} 人 / ${fmtInt(totalLeader)} · 房主 bonus ${(r.room_records || []).length} 人 / ${fmtInt(totalRoom)}`
+      : `达标主播 ${paidHosts} 人 · 公会长 ${paidLeaders} 人 · 主播钻石 ${fmtInt(totalStreamer)} · 公会长钻石 ${fmtInt(totalLeader)}${specialPayouts.length ? ` · 5241 合并 ${specialPayouts.length} 人 / ${fmtInt(totalSpecial)}` : ""}`;
+    const specialNote = special.length ? `<p class="tips-box">公会 5241 已按 special offer 单独计算（达档发下一档，主播+会长合并一张表），不进入常规主播/会长表。</p>` : "";
+    const ratioTip = r.calc_mode === "ratio"
+      ? `<p class="tips-box">独联体按昨日红钻流水（V 列，分÷100）比例发放：主播 3.5 倍、公会长 0.7 倍；房主 bonus 为房间流水的 25%。不走档位。</p>`
+      : state.product === "fano"
+        ? `<p class="tips-box">${r.daily ? "日结按 N 列「昨日红钻流水(分)」÷100 对照档位。" : "周结按本周红钻流水(分)÷100（本周为 0 则用上周）对照档位。"}未达最低档不发。</p>`
+        : "";
+    const downloads = `
+      <div class="actions">
+        <button class="btn btn-primary" data-dl="streamer">下载主播薪资（发放后台）</button>
+        <button class="btn btn-primary" data-dl="leader">下载公会长薪资（发放后台）</button>
+        ${r.calc_mode === "ratio" || (r.room_records && r.room_records.length) ? `<button class="btn btn-primary" data-dl="room">下载房主 bonus（发放后台）</button>` : ""}
+        ${specialPayouts.length ? `<button class="btn btn-primary" data-dl="special">下载 5241 special offer</button>` : ""}
+        <button class="btn btn-secondary" data-dl="detail">下载核对明细</button>
+      </div>`;
+    const specialBlock = specialPayouts.length ? payoutTable("5241 special offer 下发预览", "同一 UID 的主播 bonus 与会长 bonus 已加总；列格式与发放后台模板一致。", specialPayouts) + `
+      <section class="panel"><h3>5241 达档明细</h3>
+        <div class="table-wrap"><table><thead><tr><th>主播 uid</th><th>昵称</th><th>公会长 uid</th><th>流水</th><th>达档</th><th>发放档</th><th>主播 bonus</th><th>会长 bonus</th></tr></thead>
+        <tbody>${special.map((x) => `<tr><td>${escapeHtml(x.streamer_uid)}</td><td>${escapeHtml(x.streamer_nickname)}</td><td>${escapeHtml(x.leader_uid)}</td><td class="num">${fmtInt(x.revenue)}</td><td>${x.tier_no || "-"}</td><td>${x.payout_tier_no || "-"}</td><td class="num">${fmtInt(x.streamer_bonus)}</td><td class="num">${fmtInt(x.leader_bonus)}</td></tr>`).join("")}</tbody></table></div>
+      </section>` : "";
+    const roomBlock = (r.calc_mode === "ratio" || (r.room_records && r.room_records.length))
+      ? payoutTable("房主 bonus 下发预览", `房间流水 × ${r.room_bonus_rate}；列格式与发放后台模板一致。`, r.room_records || [], true)
+      : "";
+    const detailRows = regular.slice(0, 200).map((x) => `
+      <tr>
+        <td>${escapeHtml(x.streamer_uid)}</td><td>${escapeHtml(x.streamer_nickname)}</td>
+        <td>${escapeHtml(x.guild_id)}</td><td>${escapeHtml(x.leader_uid)}</td>
+        <td class="num">${fmtInt(x.revenue)}</td><td>${x.mic_hours == null ? "-" : escapeHtml(x.mic_hours)}</td>
+        <td>${x.mic_days == null ? "-" : escapeHtml(x.mic_days)}</td>
+        ${r.calc_mode !== "ratio" ? `<td>${x.tier_no || "-"}</td>` : ""}
+        <td class="num">${fmtInt(x.streamer_bonus)}</td><td class="num">${fmtInt(x.leader_bonus)}</td>
+      </tr>`).join("");
+    return `
+      <button class="back" data-go="calc">← 返回首页</button>
+      ${warnHtml}
+      <section class="panel">
+        <div class="row-between"><div>
+          <h1>${escapeHtml(r.region_name)} · ${escapeHtml(r.week_label)}</h1>
+          <p class="subtitle">${subtitle}</p>
+        </div></div>
+        ${specialNote}${ratioTip}${downloads}
+      </section>
+      ${specialBlock}
+      ${payoutTable("主播下发预览", "列格式与发放后台模板一致：UID + 红钻数量 + 发放原因=1（红钻薪资）", streamerPayouts)}
+      ${payoutTable("公会长下发预览", "", leaderPayouts)}
+      ${roomBlock}
+      <section class="panel">
+        <h2>常规达标明细（${regular.length} 人，供核对）</h2>
+        <div class="table-wrap"><table>
+          <thead><tr><th>主播 uid</th><th>昵称</th><th>公会 id</th><th>公会长 uid</th><th>流水</th><th>时长</th><th>天数</th>${r.calc_mode !== "ratio" ? "<th>档位</th>" : ""}<th>主播 bonus</th><th>会长 bonus</th></tr></thead>
+          <tbody>${detailRows || `<tr><td colspan="10">无数据</td></tr>`}</tbody>
+        </table></div>
+      </section>`;
+  }
+  function renderPolicy() {
+    const regions = regionsFor(state.product);
+    const code = ($("#policy-region") && $("#policy-region").value) || (state.product === "fano" ? "AF" : "TR");
+    const region = getRegion(state.product, code) || regions[0];
+    const options = regions.map((r) => `<option value="${r.code}" ${r.code === region.code ? "selected" : ""}>${escapeHtml(r.name)}（${r.code}）</option>`).join("");
+    const tiers = tiersFor(region);
+    const tierRows = region.calc_mode === "ratio"
+      ? `<p class="subtitle">本分区按比例发放，不使用档位表。主播 / 会长 / 房主比例请在上方结算设置中修改。</p>`
+      : `<div class="table-wrap"><table><thead><tr><th>编号</th><th>档位流水要求</th><th>主播钻石 bonus</th><th>公会长钻石 bonus</th></tr></thead>
+         <tbody>${tiers.map((t, i) => `<tr>
+           <td>${t.tier_no}</td>
+           <td><input name="revenue_min" data-i="${i}" value="${t.revenue_min}"></td>
+           <td><input name="streamer_bonus" data-i="${i}" value="${t.streamer_bonus}"></td>
+           <td><input name="leader_bonus" data-i="${i}" value="${t.leader_bonus}"></td>
+         </tr>`).join("")}</tbody></table></div>
+         <div class="actions">
+           <button class="btn btn-primary" type="button" id="save-policy">保存档位</button>
+           <button class="btn btn-secondary" type="button" id="reset-policy">恢复默认档位</button>
+         </div>`;
+    return `
+      <button class="back" data-go="calc">← 返回</button>
+      <section class="panel">
+        <h1>分区政策</h1>
+        <label>当前分区 <select id="policy-region">${options}</select></label>
+        <p class="subtitle">${escapeHtml(region.notes || "")}</p>
+        <form id="settings-form" class="calc-form">
+          <div class="form-grid">
+            <label>名称<input name="name" value="${escapeHtml(region.name)}" required></label>
+            <label>结算周期
+              <select name="period_type">
+                <option value="weekly" ${region.period_type !== "daily" ? "selected" : ""}>周结</option>
+                <option value="daily" ${region.period_type === "daily" ? "selected" : ""}>日结</option>
+              </select>
+            </label>
+            <label>计算方式
+              <select name="calc_mode">
+                <option value="tier" ${region.calc_mode !== "ratio" ? "selected" : ""}>档位</option>
+                <option value="ratio" ${region.calc_mode === "ratio" ? "selected" : ""}>比例（独联体）</option>
+              </select>
+            </label>
+            <label>主播比例<input name="streamer_rate" value="${region.streamer_rate ?? ""}" placeholder="如 3.5"></label>
+            <label>会长比例<input name="leader_rate" value="${region.leader_rate ?? ""}" placeholder="如 0.7"></label>
+            <label>房主 bonus 比例<input name="room_bonus_rate" value="${region.room_bonus_rate ?? ""}" placeholder="如 0.25"></label>
+            <label>特殊公会 ID<input name="special_guild_ids" value="${escapeHtml(region.special_guild_ids || "")}" placeholder="如 5241"></label>
+            <label>所属大区匹配词<input name="region_match" value="${escapeHtml(region.region_match || "")}"></label>
+            <label>特殊政策代码<input name="special_policy_code" value="${escapeHtml(region.special_policy_code || "")}" placeholder="如 TR5241"></label>
+          </div>
+          <label class="checkbox" style="margin-top:12px">
+            <input type="checkbox" name="bump_next_tier" value="1" ${region.bump_next_tier ? "checked" : ""}>
+            达档后发放下一档奖励（5241 使用）
+          </label>
+          <div class="actions"><button class="btn btn-primary" type="submit">保存设置</button></div>
+        </form>
+      </section>
+      <section class="panel">
+        <h1>档位政策</h1>
+        ${tierRows}
+      </section>`;
+  }
+  function renderGuilds() {
+    const regions = regionsFor(state.product);
+    const code = ($("#guild-region") && $("#guild-region").value) || (state.product === "fano" ? "AF" : "TR");
+    const region = getRegion(state.product, code) || regions[0];
+    const map = guildMapFor(state.product, region.code);
+    const list = Object.values(map);
+    const options = regions.map((r) => `<option value="${r.code}" ${r.code === region.code ? "selected" : ""}>${escapeHtml(r.name)}（${r.code}）</option>`).join("");
+    const rows = list.map((g) => `<tr><td>${escapeHtml(g.guild_id)}</td><td>${escapeHtml(g.guild_name || "")}</td><td>${escapeHtml(g.leader_uid || "")}</td><td>${escapeHtml(g.leader_nickname || "")}</td></tr>`).join("");
+    return `
+      <button class="back" data-go="calc">← 返回</button>
+      <section class="panel">
+        <h1>公会档案</h1>
+        <p class="subtitle">工作数据里已有工会长 UID 时可不维护此表。仅当工作表缺会长 UID 时，用公会档案补全。档案保存在本机浏览器。</p>
+        <label>分区 <select id="guild-region">${options}</select></label>
+        <form id="guild-form" class="calc-form" style="margin-top:12px">
+          <label>公会信息 Excel
+            <input type="file" name="guild_file" accept=".xlsx,.xlsm,.csv" required>
+          </label>
+          <div class="actions"><button class="btn btn-primary" type="submit">导入公会档案</button></div>
+        </form>
+        <div id="guild-alert"></div>
+      </section>
+      <section class="panel">
+        <h2>已保存 ${list.length} 条</h2>
+        <div class="table-wrap"><table>
+          <thead><tr><th>公会 id</th><th>名称</th><th>会长 uid</th><th>会长昵称</th></tr></thead>
+          <tbody>${rows || `<tr><td colspan="4">暂无档案</td></tr>`}</tbody>
+        </table></div>
+      </section>`;
+  }
+
+  function render() {
+    setTheme();
+    const app = $("#app");
+    if (state.page === "home" || !state.product) app.innerHTML = renderHome();
+    else if (state.page === "calc") app.innerHTML = renderCalc();
+    else if (state.page === "result") app.innerHTML = renderResult();
+    else if (state.page === "policy") app.innerHTML = renderPolicy();
+    else if (state.page === "guilds") app.innerHTML = renderGuilds();
+    enhanceDropzones(app);
+    if (state.page === "calc") syncRegionTips();
+    window.scrollTo(0, 0);
+  }
+
+  function go(page, product) {
+    if (product) state.product = product;
+    state.page = page;
+    if (page === "home") state.product = null;
+    render();
+  }
+
+  function syncRegionTips() {
+    const sel = $("#region-select");
+    const region = sel ? getRegion(state.product, sel.value) : null;
+    const roomField = $("#room-file-field");
+    const roomInput = roomField && roomField.querySelector('input[name="room_file"]');
+    const isRatio = region && region.calc_mode === "ratio";
+    if (roomField) roomField.style.display = isRatio ? "" : "none";
+    if (roomInput) roomInput.required = !!isRatio;
+    const tips = $("#sahi-tips");
+    if (tips) tips.textContent = tipsFor(region);
+  }
+
+  function currentPrefix(result) {
+    return `${result.week_label || ""}${result.region_name || ""}`.trim();
+  }
+
+  document.addEventListener("click", (e) => {
+    const pick = e.target.closest("[data-pick]");
+    if (pick) { go("calc", pick.getAttribute("data-pick")); return; }
+    const nav = e.target.closest("[data-go]");
+    if (nav) { go(nav.getAttribute("data-go"), state.product); return; }
+    const dl = e.target.closest("[data-dl]");
+    if (dl && state.result) {
+      const kind = dl.getAttribute("data-dl");
+      const r = state.result;
+      const prefix = currentPrefix(r);
+      const regular = r.records.filter((x) => x.record_kind !== "special");
+      const special = r.records.filter((x) => x.record_kind === "special");
+      if (kind === "streamer") downloadAoa(`${prefix} 主播薪资.xlsx`, payoutAoA(aggregatePayoutByUid(regular, "streamer_uid", "streamer_bonus")));
+      else if (kind === "leader") downloadAoa(`${prefix} 公会长薪资.xlsx`, payoutAoA(leaderPayoutRows(regular)));
+      else if (kind === "room") downloadAoa(`${prefix} 房主bonus.xlsx`, payoutAoA(aggregatePayoutByUid(r.room_records || [], "owner_uid", "room_bonus")));
+      else if (kind === "special") downloadAoa(`${r.week_label}土耳其5241 special offer.xlsx`, payoutAoA(aggregateCombinedPayouts(special)));
+      else if (kind === "detail") downloadDetail(r);
+    }
+  });
+
+  document.addEventListener("change", (e) => {
+    if (e.target.id === "region-select") syncRegionTips();
+    if (e.target.id === "policy-region" || e.target.id === "guild-region") render();
+  });
+
+  document.addEventListener("submit", async (e) => {
+    const form = e.target;
+    if (form.id === "calc-form") {
+      e.preventDefault();
+      const alertBox = $("#calc-alert");
+      const region = getRegion(state.product, form.region_code.value);
+      const file = form.file.files[0];
+      const roomFile = form.room_file && form.room_file.files[0];
+      if (!file) return;
+      if (region.calc_mode === "ratio" && !roomFile) {
+        alertBox.innerHTML = `<div class="alert alert-error">独联体请同时上传房间流水表。</div>`;
+        return;
+      }
+      alertBox.innerHTML = `<div class="alert">正在计算…</div>`;
+      const parsed = await parseWorkFile(file);
+      if (!parsed.rows.length) {
+        alertBox.innerHTML = `<div class="alert alert-error">${escapeHtml(parsed.errors[0] || "工作表为空")}</div>`;
+        return;
+      }
+      let room = { rows: [], errors: [] };
+      if (roomFile) {
+        room = await parseRoomBonusFile(roomFile, Number(region.room_bonus_rate || 0.25));
+        if (room.errors.length && !room.rows.length) {
+          alertBox.innerHTML = `<div class="alert alert-error">${escapeHtml(room.errors[0])}</div>`;
+          return;
+        }
+      }
+      const extra = enrichAndCalculate(region, parsed.rows, guildMapFor(state.product, region.code));
+      const weekLabel = String(form.week_label.value || "").trim() || inferWeekLabel(parsed.rows, extra.daily) || new Date().toISOString().slice(0, 10).replace(/-/g, "");
+      state.result = Object.assign(extra, {
+        region_name: region.name,
+        region_code: region.code,
+        week_label: weekLabel,
+        room_records: room.rows,
+        parse_errors: parsed.errors.concat(room.errors || []),
+      });
+      if (state.result.parse_errors.length) {
+        state.result.warnings = state.result.parse_errors.concat(state.result.warnings);
+      }
+      go("result", state.product);
+      return;
+    }
+    if (form.id === "settings-form") {
+      e.preventDefault();
+      const code = $("#policy-region").value;
+      const fd = new FormData(form);
+      const settings = loadJson(LS_SETTINGS, {});
+      settings[state.product + ":" + code] = {
+        name: fd.get("name"),
+        period_type: fd.get("period_type"),
+        calc_mode: fd.get("calc_mode"),
+        streamer_rate: fd.get("streamer_rate"),
+        leader_rate: fd.get("leader_rate"),
+        room_bonus_rate: fd.get("room_bonus_rate"),
+        special_guild_ids: fd.get("special_guild_ids"),
+        region_match: fd.get("region_match"),
+        special_policy_code: fd.get("special_policy_code"),
+        bump_next_tier: form.bump_next_tier.checked ? 1 : 0,
+      };
+      saveJson(LS_SETTINGS, settings);
+      render();
+      const panel = $(".panel");
+      panel.insertAdjacentHTML("afterbegin", `<div class="alert alert-success">政策已更新</div>`);
+      return;
+    }
+    if (form.id === "guild-form") {
+      e.preventDefault();
+      const code = $("#guild-region").value;
+      const file = form.guild_file.files[0];
+      const parsed = await parseGuildFile(file);
+      const box = $("#guild-alert");
+      if (!parsed.rows.length) {
+        box.innerHTML = `<div class="alert alert-error">${escapeHtml(parsed.errors[0] || "导入失败")}</div>`;
+        return;
+      }
+      const all = loadJson(LS_GUILDS, {});
+      const key = state.product + ":" + code;
+      const map = all[key] || {};
+      let inserted = 0, updated = 0;
+      for (const row of parsed.rows) {
+        if (map[row.guild_id]) updated += 1; else inserted += 1;
+        map[row.guild_id] = row;
+      }
+      all[key] = map;
+      saveJson(LS_GUILDS, all);
+      render();
+      $("#guild-alert").innerHTML = `<div class="alert alert-success">导入完成：新增 ${inserted}，更新 ${updated}</div>`;
+    }
+  });
+
+  document.addEventListener("click", (e) => {
+    if (e.target.id === "save-policy") {
+      const code = $("#policy-region").value;
+      const n = $all('input[name="revenue_min"]').length;
+      const tiers = [];
+      for (let i = 0; i < n; i++) {
+        tiers.push({
+          tier_no: i + 1,
+          revenue_min: Number($(`input[name="revenue_min"][data-i="${i}"]`).value || 0),
+          streamer_bonus: Number($(`input[name="streamer_bonus"][data-i="${i}"]`).value || 0),
+          leader_bonus: Number($(`input[name="leader_bonus"][data-i="${i}"]`).value || 0),
+        });
+      }
+      const saved = loadJson(LS_POLICY, {});
+      saved[state.product + ":" + code] = tiers;
+      saveJson(LS_POLICY, saved);
+      render();
+    }
+    if (e.target.id === "reset-policy") {
+      const code = $("#policy-region").value;
+      const saved = loadJson(LS_POLICY, {});
+      delete saved[state.product + ":" + code];
+      saveJson(LS_POLICY, saved);
+      render();
+    }
+  });
+
+  function selfTest() {
+    const fails = [];
+    const ok = (cond, msg) => { if (!cond) fails.push(msg); };
+    ok(rateBonus(10001, 3.5) === 35003, "rateBonus truncate");
+    ok(rateBonus(80574, 0.25) === 20143, "room 25%");
+    ok(fenToDiamonds(1234500) === 12345, "fen");
+    const af = matchTier(900000, policyTiersForCode("AF"), false);
+    ok(af.tier_no === 1 && af.streamer_bonus === 1440000 && af.leader_bonus === 720000, "africa t1");
+    ok(matchTier(899999, policyTiersForCode("AF"), false).streamer_bonus === 0, "africa below");
+    const ftr = matchTier(900000, policyTiersForCode("FTR"), false);
+    ok(ftr.streamer_bonus === 1620000 && ftr.leader_bonus === 900000, "fano turkey t1");
+    ok(policyTiersForCode("FTR").length === 28, "28 tiers");
+    ok(policyTiersForCode("TR5241").length === 98, "98 tiers");
+    const bumped = matchTier(100000, policyTiersForCode("TR5241"), true);
+    ok(bumped.tier_no === 1 && bumped.payout_tier_no === 2, "5241 bump");
+    ok(pickWorkRevenue({ yesterday_revenue_fen: 3600, today_revenue: 99, revenue: 1 }, true) === 36, "daily fen");
+    ok(pickWorkRevenue({ week_revenue_fen: 0, week_revenue: 0, last_week_revenue_fen: 90000000, last_week_revenue: 900000 }, false) === 900000, "week fallback");
+    ok(pickWorkRevenue({ revenue: 900000 }, true) === 0, "daily ignore diamond revenue");
+    if (fails.length) console.error("self-test failed", fails);
+    else console.log("sahi/fano self-test ok");
+  }
+
+  selfTest();
+  render();
+})();
+  </script>
+</body>
+</html>
